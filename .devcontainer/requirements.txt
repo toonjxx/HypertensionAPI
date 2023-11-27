@@ -3,3 +3,5 @@ pydantic
 uvicorn
 gunicorn
 timm
+pydantic_settings
+pyngrok

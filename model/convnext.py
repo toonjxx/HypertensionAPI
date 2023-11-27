@@ -1,8 +1,9 @@
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import trunc_normal_, DropPath
-from models.utils import LayerNorm
+from utils import LayerNorm
 
 class Block(nn.Module):
     r""" ConvNeXt Block. There are two equivalent implementations:
@@ -51,7 +52,7 @@ class ConvNeXt(nn.Module):
         head_init_scale (float): Init scaling value for classifier weights and biases. Default: 1.
     """
     def __init__(self, in_chans=1, num_classes=1,
-                 depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], drop_path_rate=0., 
+                 depths=[3, 3, 9, 3], dims=[32, 64, 128, 256], drop_path_rate=0., 
                  layer_scale_init_value=1e-6, head_init_scale=1.,dim_mul=2,dwconv_kernel_size=3,dwconv_padding=1,downsample_stem=2
                  ):
         super().__init__()

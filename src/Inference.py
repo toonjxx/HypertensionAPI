@@ -1,12 +1,10 @@
 import torch 
 import numpy as np 
-from config import CONFIG
-
 from typing import Dict, Any
 
 class Inference:
     def __init__(self, package: dict) -> None:
-        self.model = torch.load("model/base.pt")
+        self.model = package['model']
         self.classmap = {
             0: 'low risk of hypertension',
             1: 'high risk of hypertension'
@@ -22,7 +20,7 @@ class Inference:
         Returns:
             Dict[str, Any]: Preprocessed request
         """
-        
+        print(request)
         data = request['ppg']
 
         return torch.tensor(data, dtype=torch.float32).unsqueeze(0).to('cuda')

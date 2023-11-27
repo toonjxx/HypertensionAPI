@@ -1,48 +1,55 @@
-import os 
 import sys 
-import json
+sys.path.append("./model")
+sys.path.append("./src")
+import pickle
+import os
 import uvicorn
-from joblib import load
 from fastapi.logger import logger
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.exceptions import RequestValidationError
 
 import torch
-from config import CONFIG
 from Inference import Inference
-from model.convnext import ConvNeXt
+from convnext import ConvNeXt
+from contextlib import asynccontextmanager
+
+from pyngrok import ngrok
 
 
-app = FastAPI(title="Sample ML App using FastAPI", version="0.0.1")
-app.add_middleware(CORSMiddleware, allow_origins=["*"])
 
 
+def init_webhooks(base_url):
+    # Update inbound traffic via APIs to use the public-facing ngrok URL
+    pass
 
-@app.lifespan('startup')
-async def startup_event():
-    """
-    All the initialization of variables and models are to be done here
-    """
-    logger.info("=> Running environment: {}".format(CONFIG["ENV"]))
-    logger.info("=> PyTorch using device: {}".format(CONFIG["DEVICE"]))
 
-    
-    model = Model(in_features=CONFIG['IN_FEATURES'])
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+
+    model = ConvNeXt(depths=[3,3,27,3], dims=[32,64,128,256],in_chans=1,
+                         num_classes=1,drop_path_rate=0,
+                         dim_mul=2,dwconv_kernel_size=3,dwconv_padding=1,
+                         downsample_stem=2)
+    checkpoint = torch.load('./checkpoints/checkpoints.pth')
     model.load_state_dict(
-        torch.load(CONFIG['MODEL_PATH'], map_location=CONFIG['DEVICE'])
+        checkpoint['model_state_dict']
     )
 
+    model.to('cuda')
     model.eval() 
-    logger.info("=> Model loaded successfully")
+    print("=> Model loaded successfully")
     app.package = {
-        'model' : model, 
-        'scaler': load(CONFIG['SCALAR_PATH'])
+        'model' : model
     }
-
+    
     app.inference = Inference(app.package)
-    logger.info("=> Server listening on PORT")
+    print("=> Server listening on PORT")
 
+    yield
+    app.inference = None
+
+app = FastAPI(title="Sample ML App using FastAPI", version="0.0.1",lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"])
 
 @app.get('/')
 def root_dir():
@@ -51,31 +58,16 @@ def root_dir():
     }
 
 
-@app.post('/api/v1/predict', response_model=InferenceResponse, responses={422: {'model': ErrorResponse}, 500: {'model': ErrorResponse}})
-def predict(request: Request, body: InferenceInput):
-    logger.info(f'input: {body}')
+@app.post('/predict')
+def predict(request: Request, ppg):
 
-    request_params = {
-            'age' : body.age, 
-            'sex' : body.sex, 
-            'chest_pain_type': body.chest_pain_type, 
-            'resting_blood_pressure': body.resting_blood_pressure, 
-            'cholesterol': body.cholesterol, 
-            'fasting_blood_sugar': body.fasting_blood_sugar,
-            'resting_electro_cardio_graphic_result': body.resting_electro_cardio_graphic_result, # between 0-2 
-            'max_heart_rate_achieved': body.max_heart_rate_achieved, 
-            'exercise_induced_angina': body.exercise_induced_angina, 
-            'old_peak': body.old_peak, 
-    }
+    print(Request)
+    print(ppg)
+    response = app.inference.predict(ppg)
 
-    logger.info(request_params)
-
-    response = app.inference.predict(request_params)
-    logger.info(f'response: {response}')
     return {
         'error': False, 
-        'prediction': response['prediction'], 
-        'confidence': response['confidence'],
+        'prediction': response['prediction']
     }
 
 # GET Method to Information About the API 
@@ -89,8 +81,7 @@ def show_about():
     return {
         "sys.version": sys.version,
         "torch.__version__": torch.__version__,
-        "torch.cuda.is_available()": torch.cuda.is_available(),
-        "USING CUDA": CONFIG['USE_CUDE_IF_AVAILABLE']
+        "torch.cuda.is_available()": torch.cuda.is_available()
     }
 
 
